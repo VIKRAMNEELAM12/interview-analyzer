@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Interview Pro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Interview Pro</h1>
+        <select id="role-select">
+            <option value="Frontend Developer">Frontend Developer</option>
+            <option value="Data Scientist">Data Scientist</option>
+        </select>
+        <button id="start-btn">🎤 Start Recording</button>
+        <p id="status">Status: Idle</p>
+
+        <div id="results" class="hidden">
+            <canvas id="radarChart"></canvas>
+            <div id="keyword-analysis"></div>
+            <button id="pdf-btn">📥 Download PDF</button>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('start-btn');
+        const recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
+        let startTime, lastData, myChart;
+
+        startBtn.onclick = () => {
+            startTime = Date.now();
+            recognition.start();
+            document.getElementById('status').innerText = "Listening...";
+        };
+
+        recognition.onresult = (event) => {
+            const duration = (Date.now() - startTime) / 1000;
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    text: event.results[0][0].transcript, 
+                    duration: duration, 
+                    role: document.getElementById('role-select').value 
+                })
+            }).then(res => res.json()).then(data => {
+                lastData = data;
+                document.getElementById('results').classList.remove('hidden');
+                updateChart(data);
+                document.getElementById('status').innerText = `WPM: ${data.wpm}`;
+            });
+        };
+
+        function updateChart(d) {
+            const ctx = document.getElementById('radarChart').getContext('2d');
+            if(myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Accuracy', 'Confidence', 'Sentiment'],
+                    datasets: [{ label: 'Score', data: [d.accuracy, d.confidence, d.sentiment], backgroundColor: 'rgba(0, 210, 255, 0.2)', borderColor: '#00d2ff' }]
+                }
+            });
+        }
+
+        document.getElementById('pdf-btn').onclick = () => {
+            fetch('/generate_pdf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(lastData) })
+            .then(res => res.blob()).then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = "report.pdf"; a.click();
+            });
+        };
+    </script>
+</body>
+</html>

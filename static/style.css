@@ -1,0 +1,20 @@
+body {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    color: white; font-family: 'Segoe UI', sans-serif;
+    display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+}
+.container {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(15px);
+    padding: 40px; border-radius: 20px; text-align: center;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    width: 450px;
+}
+button {
+    background: #00d2ff; border: none; padding: 12px 24px;
+    border-radius: 30px; color: white; cursor: pointer; font-weight: bold;
+    margin-top: 20px; transition: 0.3s;
+}
+button:hover { transform: scale(1.05); background: #3a7bd5; }
+.hidden { display: none; }
+#radarChart { margin-top: 20px; }
