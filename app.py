@@ -1,90 +1,67 @@
-from flask import Flask, render_template, request, jsonify, send_file
-import sqlite3
-import nltk
+import os, sqlite3, nltk
+from flask import Flask, render_template, request, jsonify, send_file, session
 from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from io import BytesIO
+from openai import OpenAI
 
 app = Flask(__name__)
-nltk.download('punkt')
+app.secret_key = 'super_secret_key'
+client = OpenAI(api_key="YOUR_OPENAI_API_KEY")
 
-# Configuration
+# Role Data & Model Answers
 ROLE_DATA = {
-    "Frontend Developer": {
-        "keywords": ["react", "css", "dom", "javascript", "responsive"],
-        "model": "Frontend development involves building user interfaces using HTML, CSS, and frameworks like React to create responsive web designs."
-    },
-    "Data Scientist": {
-        "keywords": ["python", "pandas", "regression", "cleaning", "modeling"],
-        "model": "Data science uses statistical models, machine learning algorithms, and data cleaning techniques to extract insights from large datasets."
-    }
+    "Frontend Developer": {"model": "Frontend engineering focuses on UI/UX using HTML, CSS, and JS frameworks like React."},
+    "Data Scientist": {"model": "Data science involves statistical analysis, machine learning, and data cleaning."}
 }
 
 def init_db():
-    conn = sqlite3.connect('database.db')
-    conn.execute('CREATE TABLE IF NOT EXISTS performance (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, accuracy REAL, confidence REAL, sentiment REAL, wpm REAL)')
-    conn.close()
+    with sqlite3.connect('database.db') as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY, role TEXT, score REAL, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)')
 
 init_db()
 
 @app.route('/')
 def index():
+    session['chat_history'] = [] # Reset history on load
     return render_template('index.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.get_json()
-    user_text = data.get('text', '').lower()
+    user_text = data.get('text', '')
     role = data.get('role', 'Frontend Developer')
-    duration = data.get('duration', 1)
-
-    # 1. Similarity & Keywords
-    role_info = ROLE_DATA.get(role)
+    
+    # 1. Scoring Logic
     vectorizer = TfidfVectorizer()
-    tfidf = vectorizer.fit_transform([user_text, role_info['model']])
+    tfidf = vectorizer.fit_transform([user_text, ROLE_DATA[role]['model']])
     accuracy = round(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0] * 100, 2)
-    
-    # 2. Pacing (WPM)
-    wpm = round((len(user_text.split()) / duration) * 60, 1)
-    
-    # 3. Sentiment & Confidence
     sentiment = round((TextBlob(user_text).sentiment.polarity + 1) * 50, 2)
-    fillers = ["um", "uh", "like", "actually"]
-    confidence = max(0, 100 - (sum(1 for w in user_text.split() if w in fillers) * 20))
+    
+    # 2. Adaptive Follow-up
+    session['chat_history'].append({"role": "user", "content": user_text})
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": f"You are a technical interviewer for {role}."}] + session['chat_history'][-5:]
+    )
+    follow_up = response.choices[0].message.content
+    session['chat_history'].append({"role": "assistant", "content": follow_up})
 
-    # 4. Keyword Matching
-    user_words = set(user_text.split())
-    matched = list(user_words.intersection(set(role_info['keywords'])))
-    missing = list(set(role_info['keywords']) - user_words)
-
-    # Save to DB
-    conn = sqlite3.connect('database.db')
-    conn.execute('INSERT INTO performance (role, accuracy, confidence, sentiment, wpm) VALUES (?, ?, ?, ?, ?)',
-                 (role, accuracy, confidence, sentiment, wpm))
-    conn.commit()
-    conn.close()
-
-    return jsonify({
-        "accuracy": accuracy, "confidence": confidence, "sentiment": sentiment,
-        "wpm": wpm, "matched": matched, "missing": missing, "role": role
-    })
+    return jsonify({"accuracy": accuracy, "sentiment": sentiment, "follow_up": follow_up})
 
 @app.route('/generate_pdf', methods=['POST'])
 def generate_pdf():
     data = request.get_json()
     buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
-    p.drawString(100, 750, f"Interview Report: {data['role']}")
-    p.drawString(100, 730, f"Accuracy: {data['accuracy']}% | Confidence: {data['confidence']}%")
-    p.drawString(100, 710, f"WPM: {data['wpm']} | Sentiment: {data['sentiment']}%")
-    p.drawString(100, 690, f"Keywords Found: {', '.join(data['matched'])}")
+    p = canvas.Canvas(buffer)
+    p.drawString(100, 800, f"Interview Report - {data['role']}")
+    p.drawString(100, 780, f"Accuracy: {data['accuracy']}% | Sentiment: {data['sentiment']}%")
     p.showPage()
     p.save()
     buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name="report.pdf")
+    return send_file(buffer, as_attachment=True, download_name="Report.pdf")
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,75 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>AI Interview Pro</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Interview Pro | 2026</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>AI Interview Pro</h1>
-        <select id="role-select">
-            <option value="Frontend Developer">Frontend Developer</option>
-            <option value="Data Scientist">Data Scientist</option>
-        </select>
-        <button id="start-btn">🎤 Start Recording</button>
-        <p id="status">Status: Idle</p>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="logo"><i data-lucide="cpu"></i><span>AI Coach</span></div>
+            <div class="nav-links">
+                <div class="nav-item active"><i data-lucide="message-square"></i> Interview</div>
+                <div class="nav-item"><i data-lucide="bar-chart-3"></i> History</div>
+                <div class="nav-item"><i data-lucide="settings"></i> Settings</div>
+            </div>
+        </nav>
 
-        <div id="results" class="hidden">
-            <canvas id="radarChart"></canvas>
-            <div id="keyword-analysis"></div>
-            <button id="pdf-btn">📥 Download PDF</button>
-        </div>
+        <main class="workspace">
+            <header>
+                <div class="role-selector">
+                    <span>Targeting:</span>
+                    <select id="role">
+                        <option>Frontend Developer</option>
+                        <option>Data Scientist</option>
+                    </select>
+                </div>
+                <button id="pdf-btn" class="btn-secondary hidden"><i data-lucide="download"></i> Export PDF</button>
+            </header>
+
+            <div class="content-grid">
+                <section class="interview-card glass">
+                    <div id="chat-window">
+                        <div class="msg ai">
+                            <div class="avatar">AI</div>
+                            <div class="bubble">Welcome. Are you ready to begin your technical assessment?</div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-area">
+                        <button id="record-btn" class="mic-btn">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <p id="status">Click to speak...</p>
+                    </div>
+                </section>
+
+                <section class="metrics-panel">
+                    <div class="metric-card glass">
+                        <h3><i data-lucide="zap"></i> Live Analysis</h3>
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+                    <div class="mini-metrics">
+                        <div class="mini-card glass">
+                            <span class="label">Tone</span>
+                            <span id="sentiment-val" class="value">--</span>
+                        </div>
+                        <div class="mini-card glass">
+                            <span class="label">Accuracy</span>
+                            <span id="accuracy-val" class="value">--</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
     </div>
 
-    <script>
-        const startBtn = document.getElementById('start-btn');
-        const recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
-        let startTime, lastData, myChart;
-
-        startBtn.onclick = () => {
-            startTime = Date.now();
-            recognition.start();
-            document.getElementById('status').innerText = "Listening...";
-        };
-
-        recognition.onresult = (event) => {
-            const duration = (Date.now() - startTime) / 1000;
-            fetch('/analyze', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    text: event.results[0][0].transcript, 
-                    duration: duration, 
-                    role: document.getElementById('role-select').value 
-                })
-            }).then(res => res.json()).then(data => {
-                lastData = data;
-                document.getElementById('results').classList.remove('hidden');
-                updateChart(data);
-                document.getElementById('status').innerText = `WPM: ${data.wpm}`;
-            });
-        };
-
-        function updateChart(d) {
-            const ctx = document.getElementById('radarChart').getContext('2d');
-            if(myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: ['Accuracy', 'Confidence', 'Sentiment'],
-                    datasets: [{ label: 'Score', data: [d.accuracy, d.confidence, d.sentiment], backgroundColor: 'rgba(0, 210, 255, 0.2)', borderColor: '#00d2ff' }]
-                }
-            });
-        }
-
-        document.getElementById('pdf-btn').onclick = () => {
-            fetch('/generate_pdf', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(lastData) })
-            .then(res => res.blob()).then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = "report.pdf"; a.click();
-            });
-        };
-    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>lucide.createIcons();</script>
 </body>
 </html>
